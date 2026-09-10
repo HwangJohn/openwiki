@@ -1,5 +1,5 @@
 ---
-"openwiki": minor
+"openwiki": patch
 ---
 
-Allow OpenAI-compatible gateways to opt in to `OPENWIKI_REASONING_EFFORT`.
+feat: let openai-compatible opt into reasoning effort
