@@ -2,4 +2,4 @@
 "openwiki": patch
 ---
 
-Avoid rejecting Windows source fingerprints when only ctime metadata changes during a safe file read.
+fix: ignore windows ctime drift while fingerprinting
