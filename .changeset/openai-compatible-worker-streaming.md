@@ -2,4 +2,4 @@
 "openwiki": patch
 ---
 
-fix: coerce roleless OpenAI-compatible streaming worker responses
+fix: coerce roleless repository worker stream messages
