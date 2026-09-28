@@ -9,6 +9,7 @@ import {
 import {
   normalizeConceptContent,
   parseFrontmatterFields,
+  OPENWIKI_GENERATED_FIELD,
 } from "./frontmatter.js";
 
 const INDEX_FILE = "index.md";
@@ -52,6 +53,29 @@ interface Link {
 }
 
 /**
+ * Report-only signals surfaced after synchronizing indexes, so an operator can
+ * see which pages carry code-derived metadata instead of failing the run.
+ *
+ * Neither signal affects {@link validateOkfFrontmatter} or the OKF repair it
+ * feeds; both fields describe metadata quality the deterministic pass leaves
+ * as-is by design (see {@link normalizeConceptContent}).
+ */
+export interface WikiFrontmatterReport {
+  /**
+   * Wiki-root-relative paths of pages still carrying `openwiki_generated:
+   * true` after this pass, meaning their `type`/`title` were code-derived
+   * rather than authored.
+   */
+  generatedPages: string[];
+
+  /**
+   * Wiki-root-relative paths of pages indexed without a usable `description`,
+   * matching what {@link synchronizeDirectory} actually renders in the index.
+   */
+  missingDescriptionPages: string[];
+}
+
+/**
  * Synchronizes the index for every directory in the configured wiki.
  */
 export async function synchronizeWikiIndexes(
@@ -59,11 +83,23 @@ export async function synchronizeWikiIndexes(
   outputMode: OpenWikiOutputMode,
   labels: IndexLabels = ENGLISH_INDEX_LABELS,
   conceptType: string = ENGLISH_CONCEPT_TYPE,
-): Promise<void> {
+): Promise<WikiFrontmatterReport> {
   const root = outputMode === "local-wiki" ? "/" : "/openwiki";
+  const report: WikiFrontmatterReport = {
+    generatedPages: [],
+    missingDescriptionPages: [],
+  };
   for (const directory of await collectDirectories(backend, root, true)) {
-    await synchronizeDirectory(backend, directory, root, labels, conceptType);
+    await synchronizeDirectory(
+      backend,
+      directory,
+      root,
+      labels,
+      conceptType,
+      report,
+    );
   }
+  return report;
 }
 
 /**
@@ -175,6 +211,7 @@ async function synchronizeDirectory(
   root: string,
   labels: IndexLabels,
   conceptType: string,
+  report: WikiFrontmatterReport,
 ): Promise<void> {
   const files: Link[] = [];
   const directories: Link[] = [];
@@ -202,6 +239,14 @@ async function synchronizeDirectory(
       href: encodeURIComponent(name),
       label: metadata.title ?? path.posix.basename(name, ".md"),
     });
+
+    const relativePath = path.posix.relative(root, filePath);
+    if (parseFrontmatterFields(content)?.[OPENWIKI_GENERATED_FIELD] === true) {
+      report.generatedPages.push(relativePath);
+    }
+    if (metadata.description === undefined) {
+      report.missingDescriptionPages.push(relativePath);
+    }
   }
 
   const indexPath = path.posix.join(directory.path, INDEX_FILE);
