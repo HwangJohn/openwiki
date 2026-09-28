@@ -1,9 +1,13 @@
 import { describe, expect, test } from "vitest";
 import {
   BASETEN_BASE_URL_ENV_KEY,
+  BOB_BASE_URL_ENV_KEY,
   BEDROCK_DEFAULT_MAX_TOKENS,
   DEFAULT_MODEL_ID,
+  DEFAULT_PAGE_CONCURRENCY,
   DEFAULT_PROVIDER_RETRY_ATTEMPTS,
+  MAX_PAGE_CONCURRENCY,
+  PARALLEL_PROVIDER_RETRY_ATTEMPTS,
   DEFAULT_PROVIDER,
   DEFAULT_VERTEX_LOCATION,
   getDefaultModelId,
@@ -42,6 +46,7 @@ import {
   resolveProviderBaseUrl,
   resolveProviderLocation,
   resolveProviderRegion,
+  resolvePageConcurrency,
   resolveProviderRetryAttempts,
   resolveStreamIdleTimeout,
   resolveStreamIdleTimeoutForProvider,
@@ -234,6 +239,11 @@ describe("resolveProviderBaseUrl", () => {
       }),
     ).toBe("https://gateway.example/baseten/v1");
     expect(
+      resolveProviderBaseUrl("bob", {
+        [BOB_BASE_URL_ENV_KEY]: "https://gateway.example/bob/v1",
+      }),
+    ).toBe("https://gateway.example/bob/v1");
+    expect(
       resolveProviderBaseUrl("fireworks", {
         [FIREWORKS_BASE_URL_ENV_KEY]: "https://gateway.example/fireworks/v1",
       }),
@@ -268,7 +278,63 @@ describe("resolveProviderBaseUrl", () => {
   });
 });
 
+describe("resolvePageConcurrency", () => {
+  test("defaults to one sequential worker", () => {
+    expect(resolvePageConcurrency({})).toBe(DEFAULT_PAGE_CONCURRENCY);
+    expect(DEFAULT_PAGE_CONCURRENCY).toBe(1);
+  });
+
+  test("accepts integers up to the cap and trims whitespace", () => {
+    expect(resolvePageConcurrency({ OPENWIKI_PAGE_CONCURRENCY: "1" })).toBe(1);
+    expect(resolvePageConcurrency({ OPENWIKI_PAGE_CONCURRENCY: " 4 " })).toBe(
+      4,
+    );
+    expect(
+      resolvePageConcurrency({
+        OPENWIKI_PAGE_CONCURRENCY: String(MAX_PAGE_CONCURRENCY),
+      }),
+    ).toBe(MAX_PAGE_CONCURRENCY);
+  });
+
+  test("rejects values outside 1 to the cap", () => {
+    for (const value of [
+      "",
+      "   ",
+      "0",
+      "-1",
+      "1.5",
+      "abc",
+      "1e1",
+      String(MAX_PAGE_CONCURRENCY + 1),
+    ]) {
+      expect(() =>
+        resolvePageConcurrency({ OPENWIKI_PAGE_CONCURRENCY: value }),
+      ).toThrow(
+        `Invalid OPENWIKI_PAGE_CONCURRENCY. Expected an integer from 1 to ${MAX_PAGE_CONCURRENCY}.`,
+      );
+    }
+  });
+});
+
 describe("resolveProviderRetryAttempts", () => {
+  test("raises the default for concurrent page workers unless overridden", () => {
+    expect(resolveProviderRetryAttempts({}, { pageConcurrency: 1 })).toBe(
+      DEFAULT_PROVIDER_RETRY_ATTEMPTS,
+    );
+    expect(resolveProviderRetryAttempts({}, { pageConcurrency: 2 })).toBe(
+      PARALLEL_PROVIDER_RETRY_ATTEMPTS,
+    );
+    expect(PARALLEL_PROVIDER_RETRY_ATTEMPTS).toBeGreaterThan(
+      DEFAULT_PROVIDER_RETRY_ATTEMPTS,
+    );
+    expect(
+      resolveProviderRetryAttempts(
+        { OPENWIKI_PROVIDER_RETRY_ATTEMPTS: "2" },
+        { pageConcurrency: 4 },
+      ),
+    ).toBe(2);
+  });
+
   test("uses the OpenWiki default when no override is set", () => {
     expect(resolveProviderRetryAttempts({})).toBe(
       DEFAULT_PROVIDER_RETRY_ATTEMPTS,
@@ -641,6 +707,12 @@ describe("providerUsesStreaming", () => {
     delete process.env.OPENWIKI_OPENAI_COMPATIBLE_STREAMING;
 
     expect(providerUsesStreaming("copilot")).toBe(true);
+  });
+
+  test("always forces streaming for bob", () => {
+    delete process.env.OPENWIKI_OPENAI_COMPATIBLE_STREAMING;
+
+    expect(providerUsesStreaming("bob")).toBe(true);
   });
 
   test("never applies to the other providers sharing the ChatOpenAI branch", () => {
@@ -1127,6 +1199,15 @@ describe("isModelIdForOtherProvider", () => {
     expect(isModelIdForOtherProvider("claude-opus-4-8", "anthropic")).toBe(
       false,
     );
+  });
+
+  test("does not flag Claude Opus 5 on the providers that serve Claude", () => {
+    // Opus 5 was listed only under copilot, so both providers that serve Claude
+    // directly warned that it "belongs to GitHub Copilot" on every run.
+    expect(isModelIdForOtherProvider("claude-opus-5", "anthropic")).toBe(false);
+    expect(
+      isModelIdForOtherProvider("claude-opus-5", "gemini-enterprise"),
+    ).toBe(false);
   });
 
   test("does not flag shared OpenAI models across openai / openai-chatgpt", () => {
