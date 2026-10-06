@@ -48,9 +48,10 @@ only specific files, or otherwise limits the requested documentation scope,
 treat that as a hard scoped update mandate. Preserve unrelated page
 framing/theme and the existing information architecture; do not use a narrow
 request as permission for a broad wiki refresh. Schedule only directly requested
-pages/files and genuinely affected cross-references or navigation. Refresh
-/openwiki/quickstart.md only when the page map, navigation, or task-routing
-links actually change.`
+pages/files and genuinely affected cross-references or navigation. Do not refresh
+/openwiki/quickstart.md merely because a scoped update touches other pages;
+include it when the user explicitly requests it or when the page map, navigation,
+or task-routing links actually change.`
       : "";
 
   return `You are planning an OpenWiki code wiki for this repository.

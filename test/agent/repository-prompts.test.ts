@@ -120,7 +120,10 @@ describe("repository worker prompts", () => {
       /Schedule only directly requested\s+pages\/files and genuinely affected cross-references or navigation/u,
     );
     expect(prompt).toMatch(
-      /Refresh\s+\/openwiki\/quickstart\.md only when the page map, navigation, or task-routing\s+links actually change/u,
+      /Do not refresh\s+\/openwiki\/quickstart\.md merely because a scoped update touches other pages/u,
+    );
+    expect(prompt).toMatch(
+      /include it when the user explicitly requests it or when the page map, navigation,\s+or task-routing links actually change/u,
     );
   });
 
