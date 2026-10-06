@@ -2,4 +2,4 @@
 "openwiki": patch
 ---
 
-Tighten update-mode repository planning prompts for explicitly scoped documentation requests.
+fix: scope update planning to explicit requests
